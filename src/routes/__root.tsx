@@ -13,6 +13,8 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider, useAuth } from "@/hooks/use-auth";
+import { DEMO_CREDENTIALS } from "@/services/auth";
 
 
 function NotFoundComponent() {
@@ -126,16 +128,31 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+// There is no login screen yet, so sign in the demo user when no session is stored.
+// The profile (name, role, email) can then be edited from the profile drawer.
+function DemoSession() {
+  const { ready, isAuthenticated, signIn } = useAuth();
+  useEffect(() => {
+    if (ready && !isAuthenticated) {
+      void signIn(DEMO_CREDENTIALS.email, DEMO_CREDENTIALS.password).catch(() => undefined);
+    }
+  }, [ready, isAuthenticated, signIn]);
+  return null;
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider delayDuration={150}>
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <Outlet />
-        <Toaster />
-      </TooltipProvider>
+      <AuthProvider>
+        <TooltipProvider delayDuration={150}>
+          <DemoSession />
+          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+          <Outlet />
+          <Toaster />
+        </TooltipProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 

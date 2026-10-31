@@ -32,12 +32,17 @@ export const dashboardService = {
 
 export const documentService = {
   list: () => request<KnowledgeDocument[]>(endpoints.documents, { mock: mock.documents }),
+
   /**
    * Upload real File objects as multipart/form-data.
-   * Falls back to mock transport when VITE_API_BASE_URL is unset.
+   * Uses mock transport ONLY when VITE_API_BASE_URL is unset.
+   * If the backend is configured but fails, the error is thrown (no fake success).
    */
   upload: async (files: File[]): Promise<KnowledgeDocument[]> => {
     if (USE_MOCK_TRANSPORT) {
+      console.warn(
+        "[documentService] MOCK MODE: VITE_API_BASE_URL is not set, so nothing is sent to a backend.",
+      );
       await new Promise((r) => setTimeout(r, 700));
       return files.map((file, index) => ({
         id: `doc-new-${index}`,
@@ -59,41 +64,33 @@ export const documentService = {
       formData.append("files", file, file.name);
     }
 
+    let response: Response;
     try {
-      const response = await fetch(`${API_BASE_URL}${endpoints.documentUpload}`, {
+      response = await fetch(`${API_BASE_URL}${endpoints.documentUpload}`, {
         method: "POST",
         // Do NOT set Content-Type — the browser sets multipart/form-data with boundary automatically
         body: formData,
       });
-
-      if (!response.ok) {
-        const detail = await response.json().catch(() => ({ detail: response.statusText }));
-        throw new ApiError(
-          typeof detail.detail === "string" ? detail.detail : response.statusText,
-          response.status,
-          endpoints.documentUpload,
-        );
-      }
-      return (await response.json()) as KnowledgeDocument[];
     } catch (err) {
-      if (err instanceof ApiError) throw err;
-      console.warn(`[documentService] Backend unreachable for upload, falling back to local simulation.`, err);
-      await new Promise((r) => setTimeout(r, 600));
-      return files.map((file, index) => ({
-        id: `doc-new-${Date.now()}-${index}`,
-        name: file.name,
-        type: (file.name.split(".").pop() ?? "txt") as KnowledgeDocument["type"],
-        sizeBytes: file.size,
-        pages: 1,
-        chunks: Math.max(1, Math.round(file.size / 500)),
-        status: "indexed" as const,
-        embeddingModel: mock.activeConfiguration.embeddingModel,
-        indexedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        processingTimeMs: 140,
-      }));
+      console.error("[documentService] Upload request failed", err);
+      throw new ApiError(
+        "Cannot reach the backend. Check that it is running and that CORS allows this origin.",
+        0,
+        endpoints.documentUpload,
+      );
     }
+
+    if (!response.ok) {
+      const detail = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new ApiError(
+        typeof detail.detail === "string" ? detail.detail : response.statusText,
+        response.status,
+        endpoints.documentUpload,
+      );
+    }
+    return (await response.json()) as KnowledgeDocument[];
   },
+
   reindex: (id: string) =>
     request<{ ok: true }>(endpoints.documentReindex(id), {
       method: "POST",

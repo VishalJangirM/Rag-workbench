@@ -15,7 +15,7 @@ import {
   Settings,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -24,6 +24,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ProfileDrawer } from "@/components/profile/profile-drawer";
+import { NotificationsDrawer, useNotifications } from "@/components/layout/notifications-drawer";
+import { initials, useAuth } from "@/hooks/use-auth";
 import { USE_MOCK_TRANSPORT } from "@/services/api-client";
 import { cn } from "@/lib/utils";
 
@@ -65,8 +68,19 @@ export function ConnectionIndicator({ collapsed }: { collapsed?: boolean }) {
   );
 }
 
-function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+function Sidebar({
+  collapsed,
+  onToggle,
+  onOpenProfile,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+  onOpenProfile: () => void;
+}) {
   const location = useLocation();
+  const { user } = useAuth();
+  const name = user?.fullName ?? "Guest";
+  const role = user?.role ?? "";
   return (
     <aside
       className={cn(
@@ -135,21 +149,28 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
             </div>
           </div>
         )}
-        <div className={cn("flex items-center gap-2.5", collapsed && "justify-center")}>
+        <button
+          type="button"
+          onClick={onOpenProfile}
+          className={cn(
+            "flex w-full items-center gap-2.5 rounded-md text-left transition-colors hover:bg-sidebar-accent/60",
+            collapsed && "justify-center",
+          )}
+          aria-label="Open profile"
+        >
           <Avatar className="size-7">
+            {user?.avatarUrl ? <AvatarImage src={user.avatarUrl} alt={name} /> : null}
             <AvatarFallback className="bg-secondary text-[10px] font-semibold text-secondary-foreground">
-              VS
+              {initials(name)}
             </AvatarFallback>
           </Avatar>
           {!collapsed && (
             <div className="min-w-0 flex-1">
-              <div className="truncate text-xs font-medium text-sidebar-foreground">
-                Vishal Jangir
-              </div>
-              <div className="truncate text-[10px] text-muted-foreground">ML Engineer</div>
+              <div className="truncate text-xs font-medium text-sidebar-foreground">{name}</div>
+              <div className="truncate text-[10px] text-muted-foreground">{role}</div>
             </div>
           )}
-        </div>
+        </button>
         <Button
           variant="ghost"
           size="icon"
@@ -164,7 +185,21 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
   );
 }
 
-function TopBar({ title, breadcrumb }: { title: string; breadcrumb?: string[] | undefined }) {
+function TopBar({
+  title,
+  breadcrumb,
+  unreadCount,
+  onOpenNotifications,
+  onOpenProfile,
+}: {
+  title: string;
+  breadcrumb?: string[] | undefined;
+  unreadCount: number;
+  onOpenNotifications: () => void;
+  onOpenProfile: () => void;
+}) {
+  const { user } = useAuth();
+  const name = user?.fullName ?? "Guest";
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-4 border-b border-border bg-background/95 px-6 backdrop-blur">
       <div className="flex min-w-0 items-center gap-2 text-sm">
@@ -198,15 +233,31 @@ function TopBar({ title, breadcrumb }: { title: string; breadcrumb?: string[] | 
             <DropdownMenuItem>Manage workspaces</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button variant="ghost" size="icon" className="relative h-8 w-8 text-muted-foreground" aria-label="Notifications">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative h-8 w-8 text-muted-foreground"
+          aria-label="Notifications"
+          onClick={onOpenNotifications}
+        >
           <Bell className="size-4" />
-          <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary" />
+          {unreadCount > 0 && (
+            <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary" />
+          )}
         </Button>
-        <Avatar className="size-8">
-          <AvatarFallback className="bg-secondary text-xs font-semibold text-secondary-foreground">
-            VS
-          </AvatarFallback>
-        </Avatar>
+        <button
+          type="button"
+          onClick={onOpenProfile}
+          className="rounded-full transition-opacity hover:opacity-80"
+          aria-label="Open profile"
+        >
+          <Avatar className="size-8">
+            {user?.avatarUrl ? <AvatarImage src={user.avatarUrl} alt={name} /> : null}
+            <AvatarFallback className="bg-secondary text-xs font-semibold text-secondary-foreground">
+              {initials(name)}
+            </AvatarFallback>
+          </Avatar>
+        </button>
       </div>
     </header>
   );
@@ -222,13 +273,33 @@ export function AppShell({
   children: ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const notifications = useNotifications();
+
   return (
     <div className="min-h-screen bg-background">
-      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((value) => !value)} />
+      <Sidebar
+        collapsed={collapsed}
+        onToggle={() => setCollapsed((value) => !value)}
+        onOpenProfile={() => setProfileOpen(true)}
+      />
       <div className={cn("transition-[padding] duration-200", collapsed ? "pl-14" : "pl-60")}>
-        <TopBar title={title} breadcrumb={breadcrumb} />
+        <TopBar
+          title={title}
+          breadcrumb={breadcrumb}
+          unreadCount={notifications.unreadCount}
+          onOpenNotifications={() => setNotificationsOpen(true)}
+          onOpenProfile={() => setProfileOpen(true)}
+        />
         <main className="mx-auto w-full max-w-[1400px] space-y-6 p-6">{children}</main>
       </div>
+      <ProfileDrawer open={profileOpen} onOpenChange={setProfileOpen} />
+      <NotificationsDrawer
+        open={notificationsOpen}
+        onOpenChange={setNotificationsOpen}
+        notifications={notifications}
+      />
     </div>
   );
 }

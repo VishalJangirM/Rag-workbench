@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LogOut, Pencil, Settings } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -12,6 +12,8 @@ import {
   SheetDescription,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { documentsQuery, evaluationsQuery, experimentsQuery } from "@/hooks/use-ragbench";
+import type { UserStats } from "@/types";
 import { EditProfile } from "./edit-profile";
 import { ProfileCard, ProfileDetails, ProfileStats } from "./profile-card";
 
@@ -22,10 +24,21 @@ export function ProfileDrawer({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { user, stats, signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const [editing, setEditing] = useState(false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  // Real numbers from the backend instead of the mock stats in auth.ts
+  const runs = useQuery(evaluationsQuery());
+  const docs = useQuery(documentsQuery());
+  const experiments = useQuery(experimentsQuery());
+  const stats: UserStats = {
+    evaluationsRun: runs.data?.length ?? 0,
+    experiments: experiments.data?.length ?? 0,
+    documents: docs.data?.length ?? 0,
+    queriesEvaluated: (runs.data ?? []).reduce((sum, run) => sum + (run.questions ?? 0), 0),
+  };
 
   const close = () => {
     setEditing(false);
@@ -84,7 +97,7 @@ export function ProfileDrawer({
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
                   Activity
                 </div>
-                {stats && <ProfileStats stats={stats} />}
+                <ProfileStats stats={stats} />
               </div>
             </>
           )}
